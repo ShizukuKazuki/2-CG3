@@ -86,6 +86,7 @@ void GameScene::Update()
 		position.x += 1.0f;
 		//座標変更を反映
 		sprite1->SetPosition(position);
+
 	}
 
 	object3d->Update();
