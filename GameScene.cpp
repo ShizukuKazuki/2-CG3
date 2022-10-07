@@ -64,6 +64,17 @@ void GameScene::Update()
 
 		// 座標の変更を反映
 		object3d->SetPosition(position);
+
+		//スペースキーを押していたら
+		if (input->PushKey(DIK_SPACE))
+		{
+			//現在の座標
+			XMFLOAT2 position = sprite1->GetPosition();
+			//移動後の座標計算
+			position.x += 1.0f;
+			//座標変更を反映
+			sprite1 -> SetPosition(position);
+		}
 	}
 
 	// カメラ移動

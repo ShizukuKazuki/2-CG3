@@ -101,6 +101,8 @@ private: // 静的メンバ変数
 	static ComPtr<ID3D12Resource> texBuff[srvCount];
 
 public: // メンバ関数
+	//座標
+	const XMFLOAT2& GetPosition() { return position; }
 	/// <summary>
 	/// コンストラクタ
 	/// </summary>
