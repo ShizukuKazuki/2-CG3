@@ -65,16 +65,7 @@ void GameScene::Update()
 		// 座標の変更を反映
 		object3d->SetPosition(position);
 
-		//スペースキーを押していたら
-		if (input->PushKey(DIK_SPACE))
-		{
-			//現在の座標
-			XMFLOAT2 position = sprite1->GetPosition();
-			//移動後の座標計算
-			position.x += 1.0f;
-			//座標変更を反映
-			sprite1 -> SetPosition(position);
-		}
+		
 	}
 
 	// カメラ移動
@@ -84,6 +75,17 @@ void GameScene::Update()
 		else if (input->PushKey(DIK_S)) { Object3d::CameraMoveVector({ 0.0f,-1.0f,0.0f }); }
 		if (input->PushKey(DIK_D)) { Object3d::CameraMoveVector({ +1.0f,0.0f,0.0f }); }
 		else if (input->PushKey(DIK_A)) { Object3d::CameraMoveVector({ -1.0f,0.0f,0.0f }); }
+	}
+
+	//スペースキーを押していたら
+	if (input->PushKey(DIK_SPACE))
+	{
+		//現在の座標
+		XMFLOAT2 position = sprite1->GetPosition();
+		//移動後の座標計算
+		position.x += 1.0f;
+		//座標変更を反映
+		sprite1->SetPosition(position);
 	}
 
 	object3d->Update();
