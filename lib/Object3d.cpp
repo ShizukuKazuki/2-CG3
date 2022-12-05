@@ -2,6 +2,12 @@
 #include <d3dcompiler.h>
 #include <DirectXTex.h>
 
+#include <fstream>
+#include <sstream>
+#include <string.h>
+#include <vector>
+using namespace std;
+
 #pragma comment(lib, "d3dcompiler.lib")
 
 using namespace DirectX;
@@ -28,15 +34,12 @@ XMMATRIX Object3d::matProjection{};
 XMFLOAT3 Object3d::eye = { 0, 0, -50.0f };
 XMFLOAT3 Object3d::target = { 0, 0, 0 };
 XMFLOAT3 Object3d::up = { 0, 1, 0 };
-
-XMMATRIX Object3d::matBilldoard = XMMatrixIdentity();
-XMMATRIX Object3d::matBilldoardY = XMMatrixIdentity();
-
 D3D12_VERTEX_BUFFER_VIEW Object3d::vbView{};
 D3D12_INDEX_BUFFER_VIEW Object3d::ibView{};
-Object3d::VertexPosNormalUv Object3d::vertices[vertexCount];
-unsigned short Object3d::indices[indexCpunt];
-
+//Object3d::VertexPosNormalUv Object3d::vertices[vertexCount];
+//unsigned short Object3d::indices[planeCount * 3];
+std::vector<Object3d::VertexPosNormalUv> Object3d::vertices;
+std::vector<unsigned short> Object3d::indices;
 
 void Object3d::StaticInitialize(ID3D12Device * device, int window_width, int window_height)
 {
@@ -99,7 +102,13 @@ Object3d * Object3d::Create()
 		return nullptr;
 	}
 
+
+	//スケールセット
+	float scale_val = 10;
+	object3d->scale = { scale_val,scale_val,scale_val };
+
 	return object3d;
+
 }
 
 void Object3d::SetEye(XMFLOAT3 eye)
@@ -133,18 +142,6 @@ void Object3d::CameraMoveVector(XMFLOAT3 move)
 	SetTarget(target_moved);
 }
 
-void Object3d::CameraMoveEyeVector(XMFLOAT3  move)
-{
-	XMFLOAT3 eye_moved = GetEye();
-
-	eye_moved.x += move.x;
-	eye_moved.y += move.y;
-	eye_moved.z += move.z;
-
-	SetEye(eye_moved);
-
-}
-
 void Object3d::InitializeDescriptorHeap()
 {
 	HRESULT result = S_FALSE;
@@ -166,16 +163,11 @@ void Object3d::InitializeDescriptorHeap()
 
 void Object3d::InitializeCamera(int window_width, int window_height)
 {
-	
-
 	// ビュー行列の生成
 	matView = XMMatrixLookAtLH(
 		XMLoadFloat3(&eye),
 		XMLoadFloat3(&target),
 		XMLoadFloat3(&up));
-
-	//ビュー行列の生成
-	UpdateViewMatrix();
 
 	// 平行投影による射影行列の生成
 	//constMap->mat = XMMatrixOrthographicOffCenterLH(
@@ -334,8 +326,6 @@ void Object3d::InitializeGraphicsPipeline()
 	result = device->CreateGraphicsPipelineState(&gpipeline, IID_PPV_ARGS(&pipelinestate));
 	assert(SUCCEEDED(result));
 
-	gpipeline.BlendState.AlphaToCoverageEnable = true;
-
 }
 
 void Object3d::LoadTexture()
@@ -346,7 +336,7 @@ void Object3d::LoadTexture()
 	ScratchImage scratchImg{};
 
 	// WICテクスチャのロード
-	result = LoadFromWICFile( L"Resources/tex1.png", WIC_FLAGS_NONE, &metadata, scratchImg);
+	result = LoadFromWICFile( L"Resources/tex2.png", WIC_FLAGS_NONE, &metadata, scratchImg);
 	assert(SUCCEEDED(result));
 
 	ScratchImage mipChain{};
@@ -412,35 +402,71 @@ void Object3d::LoadTexture()
 
 void Object3d::CreateModel()
 {
+
 	HRESULT result = S_FALSE;
 
-	//四角形の頂点データ
-	VertexPosNormalUv verticesSquare[] =
+	//ファイルストリーム
+	std::ifstream file;
+	//.objファイルを開く
+	file.open("Resources/triangle/triangle.obj");
+	//ファイルオープン失敗をチェック
+	if (file.fail())
 	{
-		{{-5.0f,-5.0f,0.0f},{0,0,1},{0,1}},//左下
-		{{-5.0f,+5.0f,0.0f},{0,0,1},{0,0}},//左上
-		{{+5.0f,-5.0f,0.0f},{0,0,1},{1,1}},//右下
-		{{+5.0f,+5.0f,0.0f},{0,0,1},{1,0}},//右上
-	};
-	//メンバー変数にコピー
-	std::copy(std::begin(verticesSquare), std::end(verticesSquare), vertices);
+		assert(0);
+	}
 
-	
-//四角形のインデックスデータ
-	unsigned short indicesSyare[] =
+	vector<XMFLOAT3>positions;  //頂点座標
+	vector<XMFLOAT3>normals;  //法線ベクトル
+	vector<XMFLOAT2>texcoords;//テクスチャUV
+	//１行ずつ読み込む
+	string line;
+	while (getline(file, line))
 	{
-		0,1,2,
-		2,1,3,
-	};
 
-	std::copy(std::begin(indicesSyare), std::end(indicesSyare), indices);
+		//１行分の文字列ーーー
+	std:istringstream line_stream(line);
 
+		//半角スペース区切り
+		string key;
+		getline(line_stream, key, ' ');
 
-	std::copy(std::begin(indicesSyare), std::end(indicesSyare), indices );
+		//先頭の文字列がｖなら頂点座標
+		if (key == "v")
+		{
+			//X,Y,Z座標読み込み
+			XMFLOAT3 position{};
+			line_stream >> position.x;
+			line_stream >> position.y;
+			line_stream >> position.z;
+			//座標データに追加
+			positions.emplace_back(position);
+			//頂点データに追加
+			VertexPosNormalUv vertex{};
+			vertex.pos = position;
+			vertices.emplace_back(vertex);
+		}
 
+		//先頭の文字列がｆならポリゴン
+		if (key == "f")
+		{
+			//半角スペース区切り
+			string index_string;
+			while (getline(line_stream, index_string, ' '))
+			{
+
+				std::istringstream index_stream(index_string);
+				unsigned short indexPosition;
+				index_stream >> indexPosition;
+				//頂点インデックスに追加
+				indices.emplace_back(indexPosition - 1);
+			}
+		}
+	}
+	//ファイルを閉じる
+	file.close();
 
 	std::vector<VertexPosNormalUv> realVertices;
-	// 頂点座標の計算（重複あり）
+	//// 頂点座標の計算（重複あり）
 	//{
 	//	realVertices.resize((division + 1) * 2);
 	//	int index = 0;
@@ -470,7 +496,7 @@ void Object3d::CreateModel()
 	//	realVertices[index++].pos = XMFLOAT3(0, 0, zValue);	// 天面の中心点
 	//}
 
-	// 頂点座標の計算（重複なし）
+	//// 頂点座標の計算（重複なし）
 	//{
 	//	int index = 0;
 	//	// 底面
@@ -558,7 +584,10 @@ void Object3d::CreateModel()
 	//	XMStoreFloat3(&vertices[index2].normal, normal);
 	//}
 
-	UINT sizeVB = static_cast<UINT>(sizeof(vertices));
+	//UINT sizeVB = static_cast<UINT>(sizeof(vertices));
+	UINT sizeVB = static_cast<UINT>(sizeof(VertexPosNormalUv) * vertices.size());
+	UINT sizeIB  = static_cast<UINT>(sizeof(unsigned short) * indices.size());
+
 
 	// ヒーププロパティ
 	CD3DX12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -571,23 +600,29 @@ void Object3d::CreateModel()
 		IID_PPV_ARGS(&vertBuff));
 	assert(SUCCEEDED(result));
 
+
+
 	// 頂点バッファへのデータ転送
 	VertexPosNormalUv* vertMap = nullptr;
 	result = vertBuff->Map(0, nullptr, (void**)&vertMap);
 	if (SUCCEEDED(result)) {
-		memcpy(vertMap, vertices, sizeof(vertices));
+		//memcpy(vertMap, vertices, sizeof(vertices));
+		std::copy(vertices.begin(), vertices.end(), vertMap);
 		vertBuff->Unmap(0, nullptr);
 	}
 
 	// 頂点バッファビューの作成
 	vbView.BufferLocation = vertBuff->GetGPUVirtualAddress();
-	vbView.SizeInBytes = sizeof(vertices);
+	//vbView.SizeInBytes = sizeof(vertices);
+	vbView.SizeInBytes = sizeVB;
 	vbView.StrideInBytes = sizeof(vertices[0]);
 
-	UINT sizeIB = static_cast<UINT>(sizeof(indices));
+
+	//UINT sizeIB = static_cast<UINT>(sizeof(indices));
 	// リソース設定
 	resourceDesc.Width = sizeIB;
 
+	resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeIB);
 	// インデックスバッファ生成
 	result = device->CreateCommittedResource(
 		&heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
@@ -599,104 +634,30 @@ void Object3d::CreateModel()
 	if (SUCCEEDED(result)) {
 
 		// 全インデックスに対して
-		for (int i = 0; i < _countof(indices); i++)
-		{
-			indexMap[i] = indices[i];	// インデックスをコピー
-		}
-
+		//for (int i = 0; i < _countof(indices); i++)
+		//{
+		//	indexMap[i] = indices[i];	// インデックスをコピー
+		//}
+		std::copy(indices.begin(), indices.end(), indexMap);
 		indexBuff->Unmap(0, nullptr);
 	}
+
 
 	// インデックスバッファビューの作成
 	ibView.BufferLocation = indexBuff->GetGPUVirtualAddress();
 	ibView.Format = DXGI_FORMAT_R16_UINT;
-	ibView.SizeInBytes = sizeof(indices);
+	//ibView.SizeInBytes = sizeof(indices);
+	ibView.SizeInBytes = sizeIB;
+
+	
+
 }
+
 
 void Object3d::UpdateViewMatrix()
 {
 	// ビュー行列の更新
-	//matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
-	
-
-	//視点座標
-	XMVECTOR  eyePosition = XMLoadFloat3(&eye);
-	//注意点座標
-	XMVECTOR  tergetPosition = XMLoadFloat3(&target);
-	//仮の上方向
-	XMVECTOR  upVector = XMLoadFloat3(&up);
-
-	//カメラZ軸　視線方向
-	XMVECTOR cameraAxisZ =  XMVectorSubtract(tergetPosition, eyePosition);
-
-	//0ベクトルは向きが定まらい除外
-	assert(!XMVector3Equal(cameraAxisZ, XMVectorZero()));
-	assert(!XMVector3IsInfinite(cameraAxisZ));
-	assert(!XMVector3Equal(upVector, XMVectorZero()));
-	assert(!XMVector3IsInfinite(upVector));
-
-	//ベクトルを正規化
-	cameraAxisZ = XMVector3Normalize(cameraAxisZ);
-
-	//カメラのX軸（右方向）
-	XMVECTOR cameraAxisX;
-	//X軸は上方向→Z軸の外積で決まる
-	cameraAxisX = XMVector3Cross(upVector, cameraAxisZ);     
-	//ベクトルを正規化
-	cameraAxisX = XMVector3Normalize(cameraAxisX);
-
-	//カメラのY軸（上方向）
-	XMVECTOR cameraAxisY;
-	//Y軸はZ軸→X軸の外積で決まる
-	cameraAxisY = XMVector3Cross(cameraAxisZ, cameraAxisX);
-
-	//カメラ回転行列
-	XMMATRIX matCameraRot;
-	//カメラ座標→ワールド座標系の変換行列
-	matCameraRot.r[0] = cameraAxisX;
-	matCameraRot.r[1] = cameraAxisY;
-	matCameraRot.r[2] = cameraAxisZ;
-	matCameraRot.r[3] = XMVectorSet(0,0,0,1);
-
-	//転置により逆行列計算
-	matView = XMMatrixTranspose(matCameraRot);
-
-	//視点座標にー１を掛けた座標
-	XMVECTOR reverseEyeposition = XMVectorNegate(eyePosition);
-	//カメラ系座標
-	XMVECTOR  tX= XMVector3Dot(cameraAxisX, reverseEyeposition);
-	XMVECTOR  tY = XMVector3Dot(cameraAxisY, reverseEyeposition);
-	XMVECTOR  tZ = XMVector3Dot(cameraAxisZ, reverseEyeposition);
-	//1つのベクトルにまとめる
-	XMVECTOR translation = XMVectorSet(tX.m128_f32[0], tY.m128_f32[1], tZ.m128_f32[2], 1.0f);
-
-	//ビュー行列に平行移動成分を設定
-	matView.r[3] = translation;
-#pragma region
-
-	//ビルボード行列
-	matBilldoard.r[0] = cameraAxisX;
-	matBilldoard.r[1] = cameraAxisY;
-	matBilldoard.r[2] = cameraAxisZ;
-	matBilldoard.r[3] = XMVectorSet(0, 0, 0, 1);
-#pragma endregion
-
-	//カメラX,Y、Z軸
-	XMVECTOR ybillCameraAzisX, ybillCameraAzisY, ybillCameraAzisZ;
-
-	//X軸は共通
-	ybillCameraAzisX = cameraAxisX;
-	//Y軸はワールド座標系のY軸
-	ybillCameraAzisY = XMVector3Normalize(upVector);
-	//Z軸はX軸　→　Y軸の外積で求まる
-	ybillCameraAzisZ = XMVector3Cross(cameraAxisZ, cameraAxisX);
-
-	//Yビルボード行列
-	matBilldoardY.r[0] = cameraAxisX;
-	matBilldoardY.r[1] = cameraAxisY;
-	matBilldoardY.r[2] = cameraAxisZ;
-	matBilldoardY.r[3] = XMVectorSet(0, 0, 0, 1);
-
+	matView = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMLoadFloat3(&up));
 }
 
 bool Object3d::Initialize()
@@ -753,30 +714,6 @@ void Object3d::Update()
 	constMap->color = color;
 	constMap->mat = matWorld * matView * matProjection;	// 行列の合成
 	constBuff->Unmap(0, nullptr);
-
-//	//ワールド行列の合成
-	matWorld = XMMatrixIdentity(); //変形リセット
-
-	matWorld *= XMMatrixIdentity();
-
-	matWorld *= matScale; // ワールド行列にスケーリングを反映
-	matWorld *= matRot; // ワールド行列に回転を反映
-	matWorld *= matTrans; // ワールド行列に平行移動を反映
-
-	matWorld = XMMatrixIdentity(); //変形リセット
-
-	matWorld *= matBilldoardY;
-
-	matWorld *= matScale; // ワールド行列にスケーリングを反映
-	matWorld *= matRot; // ワールド行列に回転を反映
-	matWorld *= matTrans; // ワールド行列に平行移動を反映
-
-	matWorld = XMMatrixIdentity(); //変形リセット
-
-	matWorld *= matScale; // ワールド行列にスケーリングを反映
-	matWorld *= matRot; // ワールド行列に回転を反映
-	matWorld *= matBilldoard;
-	matWorld *= matTrans; // ワールド行列に平行移動を反映
 }
 
 void Object3d::Draw()
@@ -799,5 +736,6 @@ void Object3d::Draw()
 	// シェーダリソースビューをセット
 	cmdList->SetGraphicsRootDescriptorTable(1, gpuDescHandleSRV);
 	// 描画コマンド
-	cmdList->DrawIndexedInstanced(_countof(indices), 1, 0, 0, 0);
+	//cmdList->DrawIndexedInstanced(_countof(indices), 1, 0, 0, 0);
+	cmdList->DrawIndexedInstanced((UINT)indices.size(), 1, 0, 0, 0);
 }
